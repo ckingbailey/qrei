@@ -8,7 +8,52 @@ In general:
 import fetch from 'node-fetch';
 import { JSDOM } from 'jsdom';
 
-const base_url = 'https://rei.com/search'
+const BASE_URL = 'https://rei.com/search'
+const USER_AGENT = 'Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion'
+
+class QueryFilter {
+    constructor() {
+        // Validate that arguments are all 2-item iterables
+        this.filterList = arguments;
+        this.pairJoiner = encodeURIComponent(':');
+        this.filterListJoiner = encodeURIComponent(';');
+    }
+
+    toString() {
+        return this.filterList.map(f => f.join(this.pairJoiner)).join(this.filterListJoiner);
+    }
+}
+
+class Query {
+    constructor(searchTerm, filters) {
+        this.q = searchTerm;
+        this.filters = filters;
+    }
+
+    toString() {
+        return `q=${searchTerm}&r=${filters.toString()}`
+    }
+}
+
+class ReiClient {
+    constructor(base_url) {
+        this.base_url = base_url || BASE_URL;
+        this.fetch = fetch;
+        this.headers = {
+            'User-Agent': USER_AGENT
+        };
+    }
+
+    async search(query) {
+        url = `${this.base_url}?${query.toString()}`;
+        res = await this.fetch(url, this.headers);
+        // Handle undesirable response codes here.
+        // How to handle 404, which is returned when no search results,
+        // but maybe also returned for certain malformed requests?
+        return await res.text();
+    }
+}
+
 const filters = [
     [ 'gender', 'Men\'s' ],
     [ 'size', 10 ],
@@ -25,7 +70,7 @@ const url = `${base_url}?${qs}`;
 console.log(url)
 const response = await fetch(url, {
     headers: {
-        'User-Agent': 'Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion'
+        'User-Agent': USER_AGENT
     }
 });
 
