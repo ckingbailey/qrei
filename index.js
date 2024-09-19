@@ -6,6 +6,7 @@ In general:
     - [] Send notification with list of products, prices, links
 */
 import fetch from 'node-fetch';
+import Handlebars from 'handlebars';
 import { JSDOM } from 'jsdom';
 import nodemailer from 'nodemailer';
 
@@ -118,8 +119,14 @@ async function main() {
         }
     });
 
-    const text = results.map(result => result.join('\n')).join('\n\n')
-    const html = `<p>${text}<\p>`
+    const text = results.map(result => result.join('\n')).join('\n\n');
+    const source = `<ul>
+{{#results}}<li><a href='https://rei.com{{1}}'>{{0}}</a></li>{{/results}}
+</ul>`;
+    const template = Handlebars.compile(source);
+    const html = template({ results });
+
+    console.log(html)
 
     console.log(process.env['MAIL_USERNAME'])
 
