@@ -51,13 +51,17 @@ class ReiClient {
         // Handle undesirable response codes here.
         // How to handle 404, which is returned when no search results,
         // but maybe also returned for certain malformed requests?
+        if (res.status !== 200) {
+            throw Error(`${res.status} ${res.statusText}`)
+        }
+
         return res;
     }
 }
 
 const filters = [
     [ 'gender', 'Men\'s' ],
-    // [ 'size', 10 ],
+    [ 'size', 10 ],
     [ 'deals', 'See+All+Deals' ]
 ];
 const query = new Query('approach+shoes', new QueryFilter(...filters));
@@ -66,10 +70,6 @@ console.log(qs);
 
 const rei = new ReiClient();
 const response = await rei.search(query);
-
-if (response.status !== 200) {
-    throw Error(`${response.status}: ${response.statusText}`)
-}
 
 const body = await response.text();
 const dom = new JSDOM(body);
