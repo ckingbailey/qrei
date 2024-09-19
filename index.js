@@ -12,6 +12,15 @@ import nodemailer from 'nodemailer';
 
 const BASE_URL = 'https://rei.com/search'
 const USER_AGENT = 'Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion'
+const FILTERS = [
+    [ 'gender', 'Men\'s' ],
+    // [ 'size', 10 ],
+    [ 'deals', 'See+All+Deals' ]
+];
+const SEARCH_TERM = 'approach+shoes'
+const MAIL_TEMPLATE = `<ul>
+{{#results}}<li><a href='https://rei.com{{1}}'>{{0}}</a></li>{{/results}}
+</ul>`;
 
 class QueryFilter {
     constructor() {
@@ -86,13 +95,51 @@ class Scraper {
     }
 }
 
-const FILTERS = [
-    [ 'gender', 'Men\'s' ],
-    // [ 'size', 10 ],
-    [ 'deals', 'See+All+Deals' ]
-];
+class Notifier {
+    constructor(mail_config, formatter) {
+        this.transporter = nodemailer.createTransport({
+            host: mail_config.host,
+            port: mail_config.port,
+            secure: true,
+            auth: {
+                user: mail_config.username,
+                pass: mail_config.password
+            }
+        });
+        this.mail_from = mail_config.from;
+        this.formatter = formatter || new Formatter()
+    }
 
-const SEARCH_TERM = 'approach+shoes'
+    async send(mail_to, searchResults) {
+        console.log(mail_to);
+        const html = this.formatter.formatHTML(searchResults);
+        console.log(html);
+        console.log(this.mail_from);
+        return await this.transporter.sendMail({
+            to: mail_to,
+            from: this.mail_from,
+            subject: `REI search results ${SEARCH_TERM}`,
+            text: this.formatter.formatText(searchResults),
+            html: html
+        });
+    }
+}
+
+class Formatter {
+    constructor(template) {
+        const source = template || MAIL_TEMPLATE;
+        this.template = Handlebars.compile(source);
+    }
+
+    formatHTML(content) {
+        const html = this.template(content);
+        return html;
+    }
+
+    formatText(content) {
+        return content.results.map(result => result.join('\n')).join('\n\n');
+    }
+}
 
 async function main() {
     const query = new Query(SEARCH_TERM, new QueryFilter(...FILTERS));
@@ -108,35 +155,21 @@ async function main() {
     const results = scraper.getResultsList()
     
     console.log(results);
-    
-    const transporter = nodemailer.createTransport({
+
+    const notifier = new Notifier({
         host: 'mail.sonic.net',
         port: 465,
         secure: true,
-        auth: {
-            user: process.env['MAIL_USERNAME'],
-            pass: process.env['MAIL_PASSWORD']
-        }
+        username: process.env['MAIL_USERNAME'],
+        password: process.env['MAIL_PASSWORD'],
+        from: process.env['MAIL_FROM']
     });
 
-    const text = results.map(result => result.join('\n')).join('\n\n');
-    const source = `<ul>
-{{#results}}<li><a href='https://rei.com{{1}}'>{{0}}</a></li>{{/results}}
-</ul>`;
-    const template = Handlebars.compile(source);
-    const html = template({ results });
-
-    console.log(html)
-
-    console.log(process.env['MAIL_USERNAME'])
-
-    const info = await transporter.sendMail({
-        from: process.env['MAIL_FROM'],
-        to: process.env['MAIL_TO'],
-        subject: `REI search results ${SEARCH_TERM}`,
-        text: text,
-        html: html
-    })
+    const info = await notifier.send(
+        process.env['MAIL_TO'],
+        { results }
+    );
+    console.log(info);
 }
 
 main().catch(console.error);
