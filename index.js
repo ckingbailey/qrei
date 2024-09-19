@@ -14,7 +14,7 @@ const USER_AGENT = 'Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Fir
 class QueryFilter {
     constructor() {
         // Validate that arguments are all 2-item iterables
-        this.filterList = arguments;
+        this.filterList = [ ...arguments ];
         this.pairJoiner = encodeURIComponent(':');
         this.filterListJoiner = encodeURIComponent(';');
     }
@@ -31,7 +31,7 @@ class Query {
     }
 
     toString() {
-        return `q=${searchTerm}&r=${filters.toString()}`
+        return `q=${this.q}&r=${this.filters.toString()}`
     }
 }
 
@@ -45,34 +45,27 @@ class ReiClient {
     }
 
     async search(query) {
-        url = `${this.base_url}?${query.toString()}`;
-        res = await this.fetch(url, this.headers);
+        const url = `${this.base_url}?${query.toString()}`;
+        console.log(url, this.headers)
+        const res = await this.fetch(url, { headers: this.headers });
         // Handle undesirable response codes here.
         // How to handle 404, which is returned when no search results,
         // but maybe also returned for certain malformed requests?
-        return await res.text();
+        return res;
     }
 }
 
 const filters = [
     [ 'gender', 'Men\'s' ],
-    [ 'size', 10 ],
+    // [ 'size', 10 ],
     [ 'deals', 'See+All+Deals' ]
 ];
-const query = {
-    q: 'approach+shoes',
-    r: filters.map(f => f.join(encodeURIComponent(':'))).join(encodeURIComponent(';'))
-};
-const qs = Object.entries(query).map(q => q.join('=')).join('&');
-console.log(qs)
+const query = new Query('approach+shoes', new QueryFilter(...filters));
+const qs = query.toString();
+console.log(qs);
 
-const url = `${base_url}?${qs}`;
-console.log(url)
-const response = await fetch(url, {
-    headers: {
-        'User-Agent': USER_AGENT
-    }
-});
+const rei = new ReiClient();
+const response = await rei.search(query);
 
 if (response.status !== 200) {
     throw Error(`${response.status}: ${response.statusText}`)
