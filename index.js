@@ -7,6 +7,7 @@ In general:
 */
 import fetch from 'node-fetch';
 import { JSDOM } from 'jsdom';
+import nodemailer from 'nodemailer';
 
 const BASE_URL = 'https://rei.com/search'
 const USER_AGENT = 'Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion'
@@ -84,21 +85,51 @@ class Scraper {
     }
 }
 
-const filters = [
+const FILTERS = [
     [ 'gender', 'Men\'s' ],
     // [ 'size', 10 ],
     [ 'deals', 'See+All+Deals' ]
 ];
-const query = new Query('approach+shoes', new QueryFilter(...filters));
-const qs = query.toString();
-console.log(qs);
 
-const rei = new ReiClient();
-const response = await rei.search(query);
+const SEARCH_TERM = 'approach+shoes'
 
-const body = await response.text();
+async function main() {
+    const query = new Query(SEARCH_TERM, new QueryFilter(...FILTERS));
+    const qs = query.toString();
+    console.log(qs);
+    
+    const rei = new ReiClient();
+    const response = await rei.search(query);
+    
+    const body = await response.text();
+    
+    const scraper = new Scraper(body)
+    const results = scraper.getResultsList()
+    
+    console.log(results);
+    
+    const transporter = nodemailer.createTransport({
+        host: 'mail.sonic.net',
+        port: 465,
+        secure: true,
+        auth: {
+            user: process.env['MAIL_USERNAME'],
+            pass: process.env['MAIL_PASSWORD']
+        }
+    });
 
-const scraper = new Scraper(body)
-const results = scraper.getResultsList()
+    const text = results.map(result => result.join('\n')).join('\n\n')
+    const html = `<p>${text}<\p>`
 
-console.log(results);
+    console.log(process.env['MAIL_USERNAME'])
+
+    const info = await transporter.sendMail({
+        from: process.env['MAIL_FROM'],
+        to: process.env['MAIL_TO'],
+        subject: `REI search results ${SEARCH_TERM}`,
+        text: text,
+        html: html
+    })
+}
+
+main().catch(console.error);
