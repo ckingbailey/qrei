@@ -82,21 +82,36 @@ class Scraper {
 
     getResultsList() {
         const results = this.dom.window.document.getElementById(this.searchResultsClassname);
-        const hits = Array.from(Array.from(results.children).filter(this.matchTag('ul'))[0]
-            .children).filter(this.matchTag('li')).map(li => {
-                const text = li.textContent;
-                const links = new Set(Array.from(li.children).filter(this.matchTag('a')).map(a => a.href));
-                return [
-                    text,
-                    links.values().next().value
-                ];
-            })
+        const resultsList = Array.from(results.children).filter(this.matchTag('ul'))[0];
+        const hits = this.recurseNodes(resultsList, htmlNode => ((htmlNode.textContent && htmlNode.nodeName !== '#comment')
+            ? [ htmlNode.nodeName, htmlNode.textContent ]
+            : false));
         return hits;
+    }
+
+    /**
+     * Recurse into childNodes of node
+     * returning an array containing nodeName and textContent of each one.
+     * Returns an n-dimensional array of these 2-element arrays.
+     * 
+     * @param {Node} htmlNode A JSDOM Node object, just like the browser API Node object
+     * 
+     * @returns {Array}
+     */
+    recurseNodes(htmlNode, callback) {
+        // base case, no children
+        if (htmlNode.childNodes.length === 0) {
+            return callback(htmlNode);
+        }
+
+        const nodeContent = Array.from(htmlNode.childNodes).map(childNode => this.recurseNodes(childNode, callback))
+            .filter(Boolean);
+        return nodeContent.length ? nodeContent : false;
     }
 }
 
 class Notifier {
-    constructor(mail_config, formatter) {
+    constructor(mail_config) {
         this.transporter = nodemailer.createTransport({
             host: mail_config.host,
             port: mail_config.port,
@@ -107,7 +122,7 @@ class Notifier {
             }
         });
         this.mail_from = mail_config.from;
-        this.formatter = formatter || new Formatter()
+        this.formatter = new Formatter()
     }
 
     async send(mail_to, searchResults) {
@@ -154,22 +169,22 @@ async function main() {
     const scraper = new Scraper(body)
     const results = scraper.getResultsList()
     
-    console.log(results);
+    console.dir(results, { depth: 10 });
 
-    const notifier = new Notifier({
-        host: 'mail.sonic.net',
-        port: 465,
-        secure: true,
-        username: process.env['MAIL_USERNAME'],
-        password: process.env['MAIL_PASSWORD'],
-        from: process.env['MAIL_FROM']
-    });
+    // const notifier = new Notifier({
+    //     host: 'mail.sonic.net',
+    //     port: 465,
+    //     secure: true,
+    //     username: process.env['MAIL_USERNAME'],
+    //     password: process.env['MAIL_PASSWORD'],
+    //     from: process.env['MAIL_FROM']
+    // });
 
-    const info = await notifier.send(
-        process.env['MAIL_TO'],
-        { results }
-    );
-    console.log(info);
+    // const info = await notifier.send(
+    //     process.env['MAIL_TO'],
+    //     { results }
+    // );
+    // console.log(info);
 }
 
 main().catch(console.error);
