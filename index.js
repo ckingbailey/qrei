@@ -19,7 +19,7 @@ const FILTERS = [
 ];
 const SEARCH_TERM = 'approach+shoes'
 const MAIL_TEMPLATE = `<ul>
-{{#results}}<li><a href='https://rei.com{{1}}'>{{0}}</a></li>{{/results}}
+{{#each this}}<li><a href='https://rei.com{{0}}'>{{1}}</a></li>{{/each}}
 </ul>`;
 const NODE_DEPTH_FLATTEN = 10;
 
@@ -85,9 +85,13 @@ class Scraper {
         const results = this.dom.window.document.getElementById(this.searchResultsClassname);
         return Array.from(Array.from(results.children).filter(this.matchTag('ul'))[0].children)
             .filter(childElement => childElement.tagName.toLowerCase() === 'li')
-            .map(li => (this.recurseNodes(li, htmlNode => ((htmlNode.textContent && htmlNode.nodeName !== '#comment')
-                ? htmlNode.textContent
-                : false))).flat(NODE_DEPTH_FLATTEN));
+            .map(li => {
+                const links = new Set(Array.from(li.querySelectorAll('a')).map(a => a.href));
+                const textContent = (this.recurseNodes(li, htmlNode => ((htmlNode.textContent && htmlNode.nodeName !== '#comment')
+                    ? htmlNode.textContent
+                    : false))).flat(NODE_DEPTH_FLATTEN);
+                return [ links.values().next().value ].concat(textContent);
+            });
     }
 
     /**
@@ -123,19 +127,19 @@ class Notifier {
             }
         });
         this.mail_from = mail_config.from;
-        this.formatter = new Formatter()
     }
 
-    async send(mail_to, searchResults) {
+    async send(mail_to, searchResults, formatter) {
         console.log(mail_to);
-        const html = this.formatter.formatHTML(searchResults);
+        const html = formatter.formatHTML(searchResults);
         console.log(html);
-        console.log(this.mail_from);
+        const text = formatter.formatText(searchResults);
+        console.log(text);
         return await this.transporter.sendMail({
             to: mail_to,
             from: this.mail_from,
             subject: `REI search results ${SEARCH_TERM}`,
-            text: this.formatter.formatText(searchResults),
+            text: text,
             html: html
         });
     }
@@ -143,49 +147,51 @@ class Notifier {
 
 class Formatter {
     constructor(template) {
-        const source = template || MAIL_TEMPLATE;
+        const source = template;
         this.template = Handlebars.compile(source);
     }
 
     formatHTML(content) {
+        console.log('formatHTML received content:', content);
         const html = this.template(content);
         return html;
     }
 
     formatText(content) {
-        return content.results.map(result => result.join('\n')).join('\n\n');
+        return content.map(result => `• ${result.join('\n')}`).join('\n\n');
     }
 }
 
 async function main() {
     const query = new Query(SEARCH_TERM, new QueryFilter(...FILTERS));
-    const qs = query.toString();
-    console.log(qs);
     
     const rei = new ReiClient();
     const response = await rei.search(query);
     
     const body = await response.text();
     
-    const scraper = new Scraper(body)
-    const results = scraper.getResultsList()
+    const scraper = new Scraper(body);
+    const results = scraper.getResultsList();
     
-    console.dir(results, { depth: 10 });
+    // console.dir(results, { depth: 10 });
 
-    // const notifier = new Notifier({
-    //     host: 'mail.sonic.net',
-    //     port: 465,
-    //     secure: true,
-    //     username: process.env['MAIL_USERNAME'],
-    //     password: process.env['MAIL_PASSWORD'],
-    //     from: process.env['MAIL_FROM']
-    // });
+    const formatter = new Formatter(MAIL_TEMPLATE);
 
-    // const info = await notifier.send(
-    //     process.env['MAIL_TO'],
-    //     { results }
-    // );
-    // console.log(info);
+    const notifier = new Notifier({
+        host: 'mail.sonic.net',
+        port: 465,
+        secure: true,
+        username: process.env['MAIL_USERNAME'],
+        password: process.env['MAIL_PASSWORD'],
+        from: process.env['MAIL_FROM']
+    });
+
+    const info = await notifier.send(
+        process.env['MAIL_TO'],
+        results,
+        formatter
+    );
+    console.log(info);
 }
 
 main().catch(console.error);
