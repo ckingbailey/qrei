@@ -21,6 +21,7 @@ const SEARCH_TERM = 'approach+shoes'
 const MAIL_TEMPLATE = `<ul>
 {{#results}}<li><a href='https://rei.com{{1}}'>{{0}}</a></li>{{/results}}
 </ul>`;
+const NODE_DEPTH_FLATTEN = 10;
 
 class QueryFilter {
     constructor() {
@@ -82,11 +83,11 @@ class Scraper {
 
     getResultsList() {
         const results = this.dom.window.document.getElementById(this.searchResultsClassname);
-        const resultsList = Array.from(results.children).filter(this.matchTag('ul'))[0];
-        const hits = this.recurseNodes(resultsList, htmlNode => ((htmlNode.textContent && htmlNode.nodeName !== '#comment')
-            ? [ htmlNode.nodeName, htmlNode.textContent ]
-            : false));
-        return hits;
+        return Array.from(Array.from(results.children).filter(this.matchTag('ul'))[0].children)
+            .filter(childElement => childElement.tagName.toLowerCase() === 'li')
+            .map(li => (this.recurseNodes(li, htmlNode => ((htmlNode.textContent && htmlNode.nodeName !== '#comment')
+                ? htmlNode.textContent
+                : false))).flat(NODE_DEPTH_FLATTEN));
     }
 
     /**
