@@ -1,9 +1,13 @@
 {
   "dependencies": {
+    "@dotenvx/dotenvx": "^1.14.2",
     "handlebars": "^4.7.8",
     "jsdom": "^25.0.0",
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.9.15"
+  },
+  "scripts": {
+    "job": "dotenvx run -- node index.js"
   },
   "type": "module"
 }
