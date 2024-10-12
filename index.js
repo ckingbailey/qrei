@@ -3,7 +3,7 @@ In general:
     - [x] Search rei website using query string
         - [x] Need query string class to assemble their peculiar qs
     - [] Parse results for product name, price, link
-    - [] Send notification with list of products, prices, links
+    - [x] Send notification with list of products, prices, links
 */
 import fetch from 'node-fetch';
 import Handlebars from 'handlebars';
@@ -14,7 +14,7 @@ const BASE_URL = 'https://rei.com/search'
 const USER_AGENT = 'Mozilla/5.0 (platform; rv:geckoversion) Gecko/geckotrail Firefox/firefoxversion'
 const FILTERS = [
     [ 'gender', 'Men\'s' ],
-    // [ 'size', 10 ],
+    [ 'size', 10 ],
     [ 'deals', 'See+All+Deals' ]
 ];
 const SEARCH_TERM = 'approach+shoes'
@@ -60,13 +60,6 @@ class ReiClient {
         const url = `${this.base_url}?${query.toString()}`;
         console.log(url, this.headers)
         const res = await this.fetch(url, { headers: this.headers });
-        // Handle undesirable response codes here.
-        // How to handle 404, which is returned when no search results,
-        // but maybe also returned for certain malformed requests?
-        if (res.status !== 200) {
-            throw Error(`${res.status} ${res.statusText}`)
-        }
-
         return res;
     }
 }
@@ -112,6 +105,11 @@ class Scraper {
         const nodeContent = Array.from(htmlNode.childNodes).map(childNode => this.recurseNodes(childNode, callback))
             .filter(Boolean);
         return nodeContent.length ? nodeContent : false;
+    }
+
+    get404Message() {
+        const appMain = this.dom.window.document.getElementById('app-main')
+        return this.recurseNodes(appMain, htmlNode => htmlNode.textContent)
     }
 }
 
@@ -168,30 +166,41 @@ async function main() {
     const rei = new ReiClient();
     const response = await rei.search(query);
     
-    const body = await response.text();
-    
-    const scraper = new Scraper(body);
-    const results = scraper.getResultsList();
-    
-    // console.dir(results, { depth: 10 });
+    // Handle undesirable response codes here.
+    // How to handle 404 for no results found?
+    // Are there other cases where 404 would be returned?
+    if (response.status === 404) {
+        const body = await response.text();
+        const text = new Scraper(body).get404Message();
+        console.log(`No results found for query ${query.toString()}. “${text}”`);
+    } else if (response.status !== 200) {
+        throw Error(`Got bad status: ${response.status}`);
+    } else {
+        const body = await response.text();
 
-    const formatter = new Formatter(MAIL_TEMPLATE);
+        const scraper = new Scraper(body);
+        const results = scraper.getResultsList();
 
-    const notifier = new Notifier({
-        host: 'mail.sonic.net',
-        port: 465,
-        secure: true,
-        username: process.env['MAIL_USERNAME'],
-        password: process.env['MAIL_PASSWORD'],
-        from: process.env['MAIL_FROM']
-    });
+        // console.dir(results, { depth: 10 });
 
-    const info = await notifier.send(
-        process.env['MAIL_TO'],
-        results,
-        formatter
-    );
-    console.log(info);
+        const formatter = new Formatter(MAIL_TEMPLATE);
+
+        const notifier = new Notifier({
+            host: 'mail.sonic.net',
+            port: 465,
+            secure: true,
+            username: process.env['MAIL_USERNAME'],
+            password: process.env['MAIL_PASSWORD'],
+            from: process.env['MAIL_FROM']
+        });
+
+        const info = await notifier.send(
+            process.env['MAIL_TO'],
+            results,
+            formatter
+        );
+        console.log(info);
+    }
 }
 
-main().catch(console.error);
+main();
